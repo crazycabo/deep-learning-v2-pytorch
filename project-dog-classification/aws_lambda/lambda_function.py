@@ -12,23 +12,53 @@ runtime= boto3.client('runtime.sagemaker')
 def lambda_handler(event, context):
     print("Received event: " + json.dumps(event, indent=2))
 
-    data = json.loads(json.dumps(event))
-    payload = data['body']
+    try:
+        data = json.loads(json.dumps(event))
+        payload = data['body']
 
-    encoded = base64.decodebytes(payload.encode('utf-8'))
-    img = bytearray(encoded)
+        encoded = base64.decodebytes(payload.encode('utf-8'))
+        img = bytearray(encoded)
+    except:
+        return {
+            'isBase64Encoded': False,
+            'statusCode': 500,
+            'headers': {
+                'Access-Control-Allow-Headers': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
+            },
+            'body': json.dumps({
+                'error': 'Incompabile image type',
+                'message': 'Try again with a different image'
+            })
+        }
 
-    response = runtime.invoke_endpoint(
-        EndpointName=ENDPOINT_NAME,
-        ContentType='application/octet-stream',
-        Body=img
-    )
+    try:
+        response = runtime.invoke_endpoint(
+            EndpointName=ENDPOINT_NAME,
+            ContentType='application/octet-stream',
+            Body=img
+            )
 
-    result = json.loads(response['Body'].read().decode())
-    breed_index = int(np.argmax(result))
-    breed_name = get_breed(breed_index)
+        result = json.loads(response['Body'].read().decode())
+        breed_index = int(np.argmax(result))
+        breed_name = get_breed(breed_index)
+    except:
+        return {
+            'isBase64Encoded': False,
+            'statusCode': 500,
+            'headers': {
+                'Access-Control-Allow-Headers': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
+            },
+            'body': json.dumps({
+                'error': 'Exception thrown from Sagemaker endpoint',
+                'message': 'See Cloudwatch logs for details. Try an image with 3 tensors or RGB channels only.'
+            })
+        }
 
-    json_response = {
+    return {
         'isBase64Encoded': False,
         'statusCode': 200,
         'headers': {
@@ -41,8 +71,6 @@ def lambda_handler(event, context):
             'breed_index': breed_index
         })
     }
-
-    return json_response
 
 def get_breed(index):
     breeds_list = []
